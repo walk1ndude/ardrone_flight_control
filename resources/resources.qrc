@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/camera">
+        <file alias="calibdata">cameraParams.yml</file>
+    </qresource>
+</RCC>
