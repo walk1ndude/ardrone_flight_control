@@ -2,36 +2,61 @@
 
 #include <QImage>
 #include <QDebug>
-#include <Qt>
+#include <QDir>
 
 #include <sensor_msgs/image_encodings.h>
 
-#define FRONTAL_CAMERA_TOPIC "ardrone/front/image_raw"
-#define BOTTOM_CAMERA_TOPIC "ardrone/bottom/image_raw"
+#define CAMERA_TOPIC "ardrone/image_raw"
+
+#define FRONTAL_CAMERA 0
+#define BOTTOM_CAMERA 1
+
+#define SETCAMCHANNEL_SERVICE "ardrone/setcamchannel"
 
 RosObject::RosObject(QObject *parent) : QObject(parent), it(nh) {
     subscribe();
+    setServices();
     loadCalibData("/home/walkindude/cameraParams.yml");
+    setChannel();
+}
+
+void RosObject::setChannel() {
+    channel = 1;
 }
 
 void RosObject::subscribe() {
-    image_sub_f = it.subscribe(FRONTAL_CAMERA_TOPIC, 1, &RosObject::getRosImage, this);
-    image_sub_b = it.subscribe(BOTTOM_CAMERA_TOPIC, 1, &RosObject::getRosImage, this);
+    ardrone_cam = it.subscribe(CAMERA_TOPIC, 1, &RosObject::getRosImage, this);
+}
+
+void RosObject::setServices(){
+    client = nh.serviceClient<ardrone_autonomy::CamSelect>(SETCAMCHANNEL_SERVICE);
+}
+
+void RosObject::changeCamera() {
+    channel = 1 - channel;
+    srv.request.channel = channel;
+    client.call(srv);
 }
 
 void RosObject::loadCalibData(const char * path) {
 
     cv::FileStorage fs(path,cv::FileStorage::READ);
 
-    fs["cameraMatrix"] >> cameraMatrix;
-    fs["distCoeffs"] >> distortion;
+    fs["cameraMatrixFront"] >> cameraMatrix[FRONTAL_CAMERA];
+    fs["distCoeffsFront"] >> distortion[FRONTAL_CAMERA];
 
-    assert(!cameraMatrix.empty() && !distortion.empty());
+    fs["cameraMatrixBottom"] >> cameraMatrix[BOTTOM_CAMERA];
+    fs["distCoeffsBottom"] >> distortion[BOTTOM_CAMERA];
+
+    assert(!cameraMatrix[FRONTAL_CAMERA].empty() && !distortion[FRONTAL_CAMERA].empty() &&
+           !cameraMatrix[BOTTOM_CAMERA].empty() && !distortion[BOTTOM_CAMERA].empty());
     fs.release();
 }
 
 
 void RosObject::getRosImage(const sensor_msgs::ImageConstPtr & msg) {
+    qDebug() << time.elapsed();
+    time.start();
     try {
         cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
     }
@@ -39,11 +64,24 @@ void RosObject::getRosImage(const sensor_msgs::ImageConstPtr & msg) {
         ROS_ERROR("cv_bridge exception: %s", e.what());
         return;
     }
-    emit signalNewImage(mat2QImage(runCalibration(cv_ptr->image)));
+    cv::Mat cvImage = cv_ptr->image;
+
+    QImage imageFromCV = mat2QImage(runCalibration(cvImage));
+
+    if (channel == FRONTAL_CAMERA) {
+        emit signalNewImageFront(imageFromCV);
+    }
+    else {
+        emit signalNewImageBottom(imageFromCV);
+    }
 }
 
-void RosObject::startLoop() {
+void RosObject::startRosLoop() {
     ros::spin();
+}
+
+void RosObject::endRosLoop() {
+    ros::shutdown();
 }
 
 QImage RosObject::mat2QImage(const cv::Mat & image){
@@ -69,8 +107,7 @@ QImage RosObject::mat2QImage(const cv::Mat & image){
 
 cv::Mat RosObject::runCalibration(cv::Mat & image) {
     cv::Mat undistortedImage;
-
-    cv::undistort(image,undistortedImage,cameraMatrix,distortion);
+    cv::undistort(image,undistortedImage,cameraMatrix[channel],distortion[channel]);
 
     return undistortedImage;
 }

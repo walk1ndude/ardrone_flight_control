@@ -19,5 +19,5 @@ catkin_package()
 
 file(GLOB_RECURSE QT_SOURCES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} FOLLOW_SYMLINKS src/*.cpp)
 
-add_executable(droneui ${QT_SOURCES} ${QT_FORMS_HPP} ${QT_MOC_HPP})
+add_executable(droneui ${QT_SOURCES} ${QT_RESOURCES} ${QT_FORMS_HPP} ${QT_MOC_HPP})
 target_link_libraries(droneui ${QT_LIBRARIES} ${catkin_LIBRARIES})

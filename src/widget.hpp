@@ -3,6 +3,8 @@
 
 #include <QWidget>
 #include <QThread>
+#include <QCloseEvent>
+#include <QTimer>
 
 #include "rosobject.hpp"
 
@@ -25,17 +27,22 @@ private:
 
     RosObject * rosObject;
 
+    QTimer * timer;
+
+    void setTimer();
+
     void createThreads();
     void makeConnections();
     void launchThreads();
+
+protected:
+    void closeEvent(QCloseEvent * event);
 
 signals:
     void signalRosQuit();
 
 public slots:
     void setOnLabel(const QImage & image);
-    void testClicked();
-
 };
 
 #endif // WIDGET_H
